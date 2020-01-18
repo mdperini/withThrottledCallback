@@ -15,88 +15,88 @@
     <div id='root'></div>
    <!--React Components -->
     <script type='text/babel'>
-       function useThrottledCallBack(callback, delay, deps) {
-           const timeoutRef = React.useRef();
-           const callbackRef = React.useRef(callback);
-           const lastCalledRef = React.useRef(0)
+function useThrottledCallback(callback, delay, deps) {
+  const timeoutRef = React.useRef();
+  const callbackRef = React.useRef(callback);
+  const lastCalledRef = React.useRef(0);
 
-            // Remember the latest callback:
-            //
-            // Without this, if you change the callback, when setTimeout kicks in, it
-            // will still call your old callback.
-            //
-            // If you add `callback` to useCallback's deps, it will also update, but it
-            // might be called twice if the timeout had already been set.
-            React.useEffect(()=> {
-                callbackRef.current = callback
-            }, [callback])
+  // Remember the latest callback:
+  //
+  // Without this, if you change the callback, when setTimeout kicks in, it
+  // will still call your old callback.
+  //
+  // If you add `callback` to useCallback's deps, it will also update, but it
+  // might be called twice if the timeout had already been set.
 
-            React.useEffect(()=> window.clearTimeout(timeoutRef.current), [delay])
+  React.useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
-            return React.useCallback((...args) => {
-                // Clear previous timer
-                window.clearTimeout(timeoutRef.current)
+  // Clear timeout if the components is unmounted or the delay changes:
+  React.useEffect(() => window.clearTimeout(timeoutRef.current), [delay]);
 
-                function invoke() {
-                    callbackRef.current(...args)
-                    lastCalledRef.current = Date.now()
-                }
+  return React.useCallback((...args) => {
+    // Clear previous timer:
+    window.clearTimeout(timeoutRef.current);
 
-                //Calculate elapsed time
-                const elapsed = Date.now - lastCalledRef.current
+    function invoke() {
+      callbackRef.current(...args);
+      lastCalledRef.current = Date.now();
+    }
 
-                if(elapsed >= delay) {
-                    // If already waited enough, call callback
-                    invoke()
-                } else {
-                    // Otherwise, we need to wait a bit more.
-                    timeoutRef.current = window.setTimeout(invoke, delay - elapsed)             
-                }
-            }, deps)
-       }
+    // Calculate elapsed time:
+    const elapsed = Date.now() - lastCalledRef.current;
 
-       const Preview = ({ values: { name = '', message = ''} }) => (<div className="preview">
-         <p><strong>{ name }</strong></p>
-         { message.split(/\r?\n\r?\n/g).filter(Boolean).map((text, i) => (<p key={i}>{text}</p>))}
-        </div>)
+    if (elapsed >= delay) {
+      // If already waited enough, call callback:
+      invoke();
+    } else {
+      // Otherwise, we need to wait a bit more:
+      timeoutRef.current = window.setTimeout(invoke, delay - elapsed);
+    }
+  }, deps);
+}
 
-        const Form = ({ onChange }) => {
-            const [values, setValues] = React.useState({})
+const Preview = ({ values: { name = '', message = '' } }) => (<div className="preview">
+  <p><strong>{ name }</strong></p>
+  { message.split(/\r?\n\r?\n/g).filter(Boolean).map((text, i) => (<p key={ i }>{ text }</p>)) }
+</div>);
 
-            const handleChange = React.useCallback(({ target})=> {
-                setValues(values => {
-                    const nextValues = ({...values, [target.name]: target.value})
-               
-                    onChange(nextValues)
+const Form = ({ onChange }) => {
+  const [values, setValues] = React.useState({});
+  
+  // Let's assume this is internal code from Formik...:
+  
+  const handleChange = React.useCallback(({ target }) => {
+    setValues(values => {
+      const nextValues = ({ ...values, [target.name]: target.value });
+      
+      onChange(nextValues);
+    
+      return nextValues;
+    });
+  }, []);
+  
+  return (<form>
+    <input type="text" value={ values.name || '' } name="name" onChange={ handleChange } />
+    <textarea value={ values.message || '' } name="message" onChange={ handleChange } />
+  </form>);
+};
 
+const App = () => {
+  const [formValues, setFormValues] = React.useState({});
+    
+  const throttledHandleFormChange = useThrottledCallback((values) => {
+    setFormValues(values);
+  }, 500, []);
+  
+  return (<div className="editor">
+    <Form onChange={ throttledHandleFormChange } />
+    <Preview values={ formValues } />
+  </div>);
+};
 
-
-                    return nextValues
-                })
-            }, [])
-
-            return (<form>
-                <input type="text" value={values.name || ''} name="name" onChange={handleChange} />
-                <textarea value={ values.message || ''} name="message" onChange={handleChange} />
-                </form>)
-        }
-
-        const App = () => {
-            const [formValues, setFormValues] = React.useState({})
-
-            const throttledHandleFormChange = useThrottledCallBack((values)=> {
-                setFormValues(values)
-            }, 1000, [])
-
-            return (
-                <div className="editor">
-                    <Form onChange={throttledHandleFormChange} />
-                    <Preview values={formValues} />
-                </div>
-            )
-        }
-
-        ReactDOM.render(
+       ReactDOM.render(
                 <App  />,
             document.getElementById('root')
         )
