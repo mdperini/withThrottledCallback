@@ -1,0 +1,106 @@
+<html lang="en">
+        <!DOCTYPE html>
+<head>
+    <title>Throttled Handle Form Change</title>
+    <script src='http://cdnjs.cloudflare.com/ajax/libs/redux/3.7.2/redux.min.js'></script>
+    <script src='https://unpkg.com/react@16.7.0-alpha.0/umd/react.development.js'></script>
+    <script src='https://unpkg.com/react-dom@16.7.0-alpha.0/umd/react-dom.development.js'></script>
+    <script src='https://unpkg.com/babel-standalone@6.15.0/babel.min.js'></script>
+    <script src='https://tylermcginnis.com/goals-todos-api/index.js'></script>
+    <script src='https://unpkg.com/redux-thunk@2.2.0/dist/redux-thunk.min.js'></script>
+    <script src='https://unpkg.com/react-redux@5.0.6/dist/react-redux.min.js'></script>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <div id='root'></div>
+   <!--React Components -->
+    <script type='text/babel'>
+       function useThrottledCallBack(callback, delay, deps) {
+           const timeoutRef = React.useRef();
+           const callbackRef = React.useRef(callback);
+           const lastCalledRef = React.useRef(0)
+
+            // Remember the latest callback:
+            //
+            // Without this, if you change the callback, when setTimeout kicks in, it
+            // will still call your old callback.
+            //
+            // If you add `callback` to useCallback's deps, it will also update, but it
+            // might be called twice if the timeout had already been set.
+            React.useEffect(()=> {
+                callbackRef.current = callback
+            }, [callback])
+
+            React.useEffect(()=> window.clearTimeout(timeoutRef.current), [delay])
+
+            return React.useCallback((...args) => {
+                // Clear previous timer
+                window.clearTimeout(timeoutRef.current)
+
+                function invoke() {
+                    callbackRef.current(...args)
+                    lastCalledRef.current = Date.now()
+                }
+
+                //Calculate elapsed time
+                const elapsed = Date.now - lastCalledRef.current
+
+                if(elapsed >= delay) {
+                    // If already waited enough, call callback
+                    invoke()
+                } else {
+                    // Otherwise, we need to wait a bit more.
+                    timeoutRef.current = window.setTimeout(invoke, delay - elapsed)             
+                }
+            }, deps)
+       }
+
+       const Preview = ({ values: { name = '', message = ''} }) => (<div className="preview">
+         <p><strong>{ name }</strong></p>
+         { message.split(/\r?\n\r?\n/g).filter(Boolean).map((text, i) => (<p key={i}>{text}</p>))}
+        </div>)
+
+        const Form = ({ onChange }) => {
+            const [values, setValues] = React.useState({})
+
+            const handleChange = React.useCallback(({ target})=> {
+                setValues(values => {
+                    const nextValues = ({...values, [target.name]: target.value})
+               
+                    onChange(nextValues)
+
+
+
+                    return nextValues
+                })
+            }, [])
+
+            return (<form>
+                <input type="text" value={values.name || ''} name="name" onChange={handleChange} />
+                <textarea value={ values.message || ''} name="message" onChange={handleChange} />
+                </form>)
+        }
+
+        const App = () => {
+            const [formValues, setFormValues] = React.useState({})
+
+            const throttledHandleFormChange = useThrottledCallBack((values)=> {
+                setFormValues(values)
+            }, 1000, [])
+
+            return (
+                <div className="editor">
+                    <Form onChange={throttledHandleFormChange} />
+                    <Preview values={formValues} />
+                </div>
+            )
+        }
+
+        ReactDOM.render(
+                <App  />,
+            document.getElementById('root')
+        )
+    </script>
+</body>    
+<!--https://stackoverflow.com/questions/59277957/debouncing-throttling-a-callback-in-react-using-hooks-without-waiting-for-the-->
+</html>
